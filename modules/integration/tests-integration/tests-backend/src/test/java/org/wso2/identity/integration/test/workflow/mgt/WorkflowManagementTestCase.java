@@ -18,7 +18,6 @@
 
 package org.wso2.identity.integration.test.workflow.mgt;
 
-import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.ConfigurationContextFactory;
 import org.testng.Assert;
@@ -28,10 +27,13 @@ import org.testng.annotations.Test;
 import org.wso2.carbon.automation.engine.context.AutomationContext;
 import org.wso2.carbon.automation.engine.context.TestUserMode;
 import org.wso2.carbon.automation.extensions.servers.carbonserver.MultipleServersManager;
-import org.wso2.carbon.identity.workflow.mgt.stub.bean.AssociationDTO;
-import org.wso2.carbon.identity.workflow.mgt.stub.bean.BPSProfileDTO;
-import org.wso2.carbon.identity.workflow.mgt.stub.bean.ParameterDTO;
-import org.wso2.carbon.identity.workflow.mgt.stub.bean.WorkflowDTO;
+import org.wso2.carbon.identity.workflow.impl.stub.bean.BPSProfile;
+import org.wso2.carbon.identity.workflow.mgt.stub.WorkflowAdminServiceWorkflowException;
+import org.wso2.carbon.identity.workflow.mgt.stub.bean.Parameter;
+import org.wso2.carbon.identity.workflow.mgt.stub.metadata.Association;
+import org.wso2.carbon.identity.workflow.mgt.stub.metadata.Template;
+import org.wso2.carbon.identity.workflow.mgt.stub.metadata.WorkflowImpl;
+import org.wso2.carbon.identity.workflow.mgt.stub.metadata.WorkflowWizard;
 import org.wso2.carbon.integration.common.admin.client.AuthenticatorClient;
 import org.wso2.carbon.um.ws.api.stub.ClaimValue;
 import org.wso2.carbon.um.ws.api.stub.PermissionDTO;
@@ -39,12 +41,11 @@ import org.wso2.identity.integration.common.clients.usermgt.remote.RemoteUserSto
 import org.wso2.identity.integration.common.clients.workflow.mgt.WorkflowAdminClient;
 import org.wso2.identity.integration.common.utils.CarbonTestServerManager;
 import org.wso2.identity.integration.common.utils.ISIntegrationTest;
+import org.wso2.identity.integration.test.utils.ServiceDeploymentUtil;
 import org.wso2.identity.integration.test.utils.WorkflowConstants;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import java.rmi.RemoteException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class WorkflowManagementTestCase extends ISIntegrationTest {
@@ -53,13 +54,15 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
     private RemoteUserStoreManagerServiceClient usmClient;
     public MultipleServersManager manager = new MultipleServersManager();
 
-
     private String addUserWorkflowName = "TestWorkflowAddUser1";
     private String workflowId = null;
     private String associationId = null;
     private String[] rolesToAdd = {"wfRole1", "wfRole2", "wfRole3"};
     private String sessionCookie2;
     private String servicesUrl = "https://localhost:9844/services/";
+
+    private String templateId = "MultiStepApprovalTemplate";
+    private String workflowImplId = "ApprovalWorkflow";
 
     @BeforeClass(alwaysRun = true)
     public void testInit() throws Exception {
@@ -86,7 +89,6 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
 
         Map<String, String> startupParameterMap1 = new HashMap<String, String>();
         startupParameterMap1.put("-DportOffset", "401");
-        startupParameterMap1.put("-Dprofile", WorkflowConstants.WORKFLOW_PROFILE);
 
         AutomationContext context1 = new AutomationContext("IDENTITY", "identity002", TestUserMode.SUPER_TENANT_ADMIN);
         CarbonTestServerManager server1 = new CarbonTestServerManager(context1, System.getProperty("carbon.zip"),
@@ -113,24 +115,27 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
     public void testAddBPSProfile() {
 
         String profileName = "TestBPSProfile";
-        String host = "https://localhost:9844";
+        String host = "https://localhost:9844/services";
         String user = "admin";
         String userPassword = "admin";
+        String[] passwordAsArray = new String[userPassword.length()];
+        for (int i=0;i<userPassword.length();i++) {
+            passwordAsArray[i] = userPassword.charAt(i) + "";
+        }
         try {
-            BPSProfileDTO bpsProfileDTO = new BPSProfileDTO();
+            BPSProfile bpsProfileDTO = new BPSProfile();
             bpsProfileDTO.setProfileName(profileName);
-            bpsProfileDTO.setHost(host);
+            bpsProfileDTO.setManagerHostURL(host);
+            bpsProfileDTO.setWorkerHostURL(host);
             bpsProfileDTO.setUsername(user);
-            bpsProfileDTO.setPassword(userPassword);
-            bpsProfileDTO.setCallbackUser(user);
-            bpsProfileDTO.setCallbackPassword(userPassword);
+            bpsProfileDTO.setPassword(passwordAsArray);
             client.addBPSProfile(bpsProfileDTO);
-            BPSProfileDTO[] bpsProfiles = client.listBPSProfiles();
+            BPSProfile[] bpsProfiles = client.listBPSProfiles();
             if (bpsProfiles == null || bpsProfiles.length == 0) {
                 Assert.fail("BPS Profile list is empty, profile adding has been failed");
             }
             boolean added = false;
-            for (BPSProfileDTO bpsProfile : bpsProfiles) {
+            for (BPSProfile bpsProfile : bpsProfiles) {
                 if (profileName.equals(bpsProfile.getProfileName())) {
                     added = true;
                     break;
@@ -143,19 +148,23 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
     }
 
     @Test(alwaysRun = true, description = "Testing adding a BPS Profile with existing name", dependsOnMethods =
-            "testAddBPSProfile", expectedExceptions = AxisFault.class)
+            "testAddBPSProfile", expectedExceptions = Exception.class)
     public void testAddDuplicateBPSProfile() throws Exception {
 
         String profileName = "TestBPSProfile";
-        String host = "https://localhost:9845";
+        String host = "https://localhost:9845/services";
         String user = "testUser";
-        String userPassword = "testPassword";BPSProfileDTO bpsProfileDTO = new BPSProfileDTO();
+        String userPassword = "testPassword";
+        String[] passwordAsArray = new String[userPassword.length()];
+        for (int i=0;i<userPassword.length();i++) {
+            passwordAsArray[i] = userPassword.charAt(i) + "";
+        }
+        BPSProfile bpsProfileDTO = new BPSProfile();
         bpsProfileDTO.setProfileName(profileName);
-        bpsProfileDTO.setHost(host);
+        bpsProfileDTO.setManagerHostURL(host);
+        bpsProfileDTO.setWorkerHostURL(host);
         bpsProfileDTO.setUsername(user);
-        bpsProfileDTO.setPassword(userPassword);
-        bpsProfileDTO.setCallbackUser(user);
-        bpsProfileDTO.setCallbackPassword(userPassword);
+        bpsProfileDTO.setPassword(passwordAsArray);
         client.addBPSProfile(bpsProfileDTO);
     }
 
@@ -164,17 +173,17 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
 
         String workflowDescription = "TestWorkflowDescription";
         try {
-            WorkflowDTO workflowDTO = getWorkflowDTO(addUserWorkflowName, workflowDescription);
+            WorkflowWizard workflowDTO = getWorkflowDTO(addUserWorkflowName, workflowDescription);
 
 
-            client.addWorkflow(workflowDTO, Collections.EMPTY_LIST, getTemplateImplParams());
+            client.addWorkflow(workflowDTO);
 
-            WorkflowDTO[] workflows = client.listWorkflows();
+            WorkflowWizard[] workflows = client.listWorkflows();
             if (workflows == null || workflows.length == 0) {
                 Assert.fail("Workflow list is empty, new workflow is not added");
             }
             boolean added = false;
-            for (WorkflowDTO workflow : workflows) {
+            for (WorkflowWizard workflow : workflows) {
                 if (addUserWorkflowName.equals(workflow.getWorkflowName()) && workflowDescription.equals(workflow
                         .getWorkflowDescription())) {
                     added = true;
@@ -200,12 +209,12 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
         try {
             client.addAssociation(workflowId, associationName, WorkflowConstants.ADD_USER_EVENT, condition);
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
             if (associations == null || associations.length == 0) {
                 Assert.fail("Association list is empty, new association is not added");
             }
             boolean added = false;
-            for (AssociationDTO association : associations) {
+            for (Association association : associations) {
                 if (associationName.equals(association.getAssociationName())) {
                     added = true;
                     associationId = association.getAssociationId();
@@ -221,8 +230,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
     @Test(alwaysRun = true, description = "Testing a added association where request matches condition",
             dependsOnMethods = "testAddAssociation")
     public void testAssociationForMatch() {
-        String userName1 = "TestUser1ForSuccessAddUserWorkflow";
-        String userName2 = "TestUser2ForSuccessAddUserWorkflow";
+        String userName1 = "TestUser1ForSuccess";
+        String userName2 = "TestUser2ForSuccess";
         try {
 
             usmClient.addUser(userName1, "test12345", new String[]{"wfRole1"}, new ClaimValue[0], null, false);
@@ -343,8 +352,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             // test passed
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -367,13 +376,13 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
     @Test(alwaysRun = true, description = "Testing delete user operation when workflows associated with it.",
             dependsOnMethods = "testAddUserOperation")
     public void testDeleteUserOperation() {
-        String userName1 = "TestUser1ForDeleteUserWorkflow";
-        String userName2 = "TestUser2ForDeleteUserWorkflow";
-        String userName3 = "TestUser3ForDeleteUserWorkflow";
-        String userName4 = "TestUser4ForDeleteUserWorkflow";
-        String userName5 = "TestUser5ForDeleteUserWorkflow";
-        String roleName1 = "TestRole1ForDeleteUserWorkflow";
-        String roleName2 = "TestRole2ForDeleteUserWorkflow";
+        String userName1 = "TestUser1DeleteUserWorkflow";
+        String userName2 = "TestUser2DeleteUserWorkflow";
+        String userName3 = "TestUser3DeleteUserWorkflow";
+        String userName4 = "TestUser4DeleteUserWorkflow";
+        String userName5 = "TestUser5DeleteUserWorkflow";
+        String roleName1 = "TestRole1DeleteUserWorkflow";
+        String roleName2 = "TestRole2DeleteUserWorkflow";
 
         try {
             client.addAssociation(workflowId, "TestDeleteUserAssociation", WorkflowConstants.DELETE_USER_EVENT,
@@ -423,8 +432,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestAddRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -461,8 +470,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateUserListOfRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -493,8 +502,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateRoleListOfUserAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -525,8 +534,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteUserAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -601,8 +610,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateRoleNameAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -631,8 +640,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestAddRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -644,8 +653,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -662,13 +671,13 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             dependsOnMethods = "testAddRoleOperation")
     public void testDeleteRoleOperation() {
 
-        String userName1 = "TestUser1ForDeleteRoleWorkflow";
-        String userName2 = "TestUser2ForDeleteRoleWorkflow";
-        String roleName1 = "TestRole1ForDeleteRoleWorkflow";
-        String roleName2 = "TestRole2ForDeleteRoleWorkflow";
-        String roleName3 = "TestRole3ForDeleteRoleWorkflow";
-        String roleName4 = "TestRole4ForDeleteRoleWorkflow";
-        String roleName5 = "TestRole5ForDeleteRoleWorkflow";
+        String userName1 = "TestUser1DeleteRoleWorkflow";
+        String userName2 = "TestUser2DeleteRoleWorkflow";
+        String roleName1 = "TestRole1DeleteRoleWorkflow";
+        String roleName2 = "TestRole2DeleteRoleWorkflow";
+        String roleName3 = "TestRole3DeleteRoleWorkflow";
+        String roleName4 = "TestRole4DeleteRoleWorkflow";
+        String roleName5 = "TestRole5DeleteRoleWorkflow";
         try {
 
             usmClient.addUser(userName1, "test12345", new String[0], new ClaimValue[0], null, false);
@@ -719,8 +728,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateUserListOfRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -749,8 +758,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateRoleListOfUserAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -779,8 +788,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateRoleNameAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -792,8 +801,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -850,8 +859,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteUserAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -876,8 +885,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -902,8 +911,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestRenameRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -915,8 +924,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateUserListOfRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -969,8 +978,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteUserAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -995,8 +1004,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1021,8 +1030,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             //test pass
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestRenameRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1034,8 +1043,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateRoleListOfUserAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1090,8 +1099,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestAddUserAssociationForRoleRename".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1117,8 +1126,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteRoleAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1144,8 +1153,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateUserListAssociationForRename".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1171,8 +1180,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateRoleListAssociationForRename".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1196,8 +1205,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestUpdateRoleNameAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1219,7 +1228,7 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             dependsOnMethods = "testUpdateRoleNameOperation")
     public void testUpdateUserClaimOperation() {
 
-        String userName1 = "TestUser1ForDeleteClaimWorkflow";
+        String userName1 = "TestUser1DeleteClaimWorkflow";
         try {
             usmClient.addUser(userName1, "passwd123", new String[0], new ClaimValue[0], null,
                     false);
@@ -1243,8 +1252,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
 
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteUserAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1255,8 +1264,8 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
             log.error("Error while clean up testUpdateRoleListOfUser");
         }
         try {
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
-            for (AssociationDTO association : associations) {
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
+            for (Association association : associations) {
                 if ("TestDeleteUserClaimValueAssociation".equals(association.getAssociationName())) {
                     associationId = association.getAssociationId();
                     client.deleteAssociation(associationId);
@@ -1280,9 +1289,9 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
         try {
             client.deleteAssociation(associationId);
-            AssociationDTO[] associations = client.listAssociationsForWorkflow(workflowId);
+            Association[] associations = client.listAssociationsForWorkflow(workflowId);
             if (associations != null) {
-                for (AssociationDTO association : associations) {
+                for (Association association : associations) {
                     if (associationId.equals(association.getAssociationId())) {
                         Assert.fail("Association " + associationId + " is not deleted, It still exists");
                         break;
@@ -1301,16 +1310,24 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         if (workflowId == null) {
             Assert.fail("Workflow has not been added in the previous test");
         }
+        String workflowServiceName = addUserWorkflowName + "TaskService";
         try {
-            client.deleteWorkflow(workflowId);
-            WorkflowDTO[] workflows = client.listWorkflows();
-            if (workflows != null) {
-                for (WorkflowDTO workflow : workflows) {
-                    if (workflowId.equals(workflow.getWorkflowId())) {
-                        Assert.fail("Workflow " + workflowId + " is not deleted, It still exists");
-                        break;
+            boolean workflowServiceDeployed = ServiceDeploymentUtil.
+                    isServiceDeployed(servicesUrl, sessionCookie2, workflowServiceName);
+            if (workflowServiceDeployed) {
+                client.deleteWorkflow(workflowId);
+                WorkflowWizard[] workflows = client.listWorkflows();
+                if (workflows != null) {
+                    for (WorkflowWizard workflow : workflows) {
+                        if (workflowId.equals(workflow.getWorkflowId())) {
+                            Assert.fail("Workflow " + workflowId + " is not deleted, It still exists");
+                            break;
+                        }
                     }
                 }
+            } else {
+                Assert.fail(" Workflow Artifacts failed to deploy within : "
+                        + ServiceDeploymentUtil.SERVICE_DEPLOYMENT_DELAY + " mills ");
             }
         } catch (Exception e) {
             Assert.fail("Error while deleting the workflow", e);
@@ -1324,9 +1341,9 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         String profileName = "TestBPSProfile";
         try {
             client.deleteBPSProfile(profileName);
-            BPSProfileDTO[] bpsProfiles = client.listBPSProfiles();
+            BPSProfile[] bpsProfiles = client.listBPSProfiles();
             if (bpsProfiles != null) {
-                for (BPSProfileDTO bpsProfile : bpsProfiles) {
+                for (BPSProfile bpsProfile : bpsProfiles) {
                     if (profileName.equals(bpsProfile.getProfileName())) {
                         Assert.fail("BPS Profile " + profileName + " is not deleted");
                         break;
@@ -1338,32 +1355,53 @@ public class WorkflowManagementTestCase extends ISIntegrationTest {
         }
     }
 
-    private WorkflowDTO getWorkflowDTO(String workflowName, String workflowDescription) {
+    private WorkflowWizard getWorkflowDTO(String workflowName, String workflowDescription)
+            throws RemoteException, WorkflowAdminServiceWorkflowException {
 
-        WorkflowDTO workflowDTO = new WorkflowDTO();
-        workflowDTO.setWorkflowName(addUserWorkflowName);
+        WorkflowWizard workflowDTO = new WorkflowWizard();
+        workflowDTO.setWorkflowName(workflowName);
         workflowDTO.setWorkflowDescription(workflowDescription);
-        workflowDTO.setTemplateName("SimpleApproval");
-        workflowDTO.setImplementationName("BPEL");
+        workflowDTO.setTemplateId(templateId);
+        workflowDTO.setWorkflowImplId(workflowImplId);
+        Template template = client.getTemplate(templateId);
+        workflowDTO.setTemplate(template);
+        WorkflowImpl workflowImpl = client.getWorkflowImpl(templateId, workflowImplId);
+        workflowDTO.setWorkflowImpl(workflowImpl);
+
+        Parameter[] parametersImpl =new Parameter[2];
+
+        Parameter parameter = new Parameter();
+        parameter.setParamName("BPSProfile");
+        parameter.setParamValue("embeded_bps");
+        parameter.setHolder("WorkflowImpl");
+        parameter.setQName("BPSProfile");
+
+        parametersImpl[0] = parameter ;
+
+        parameter = new Parameter();
+        parameter.setParamName("HTSubject");
+        parameter.setParamValue("sample ht");
+        parameter.setHolder("WorkflowImpl");
+        parameter.setQName("HTSubject");
+
+        parametersImpl[1] = parameter ;
+
+        Parameter[] parametersTmp =new Parameter[1];
+
+        parameter = new Parameter();
+        parameter.setParamName("UserAndRole");
+        parameter.setParamValue("admin");
+        parameter.setHolder("Template");
+        parameter.setQName("UserAndRole-step-1-roles");
+
+        parametersTmp[0] = parameter ;
+
+        workflowDTO.setTemplateParameters(parametersTmp);
+        workflowDTO.setWorkflowImplParameters(parametersImpl);
+
         return workflowDTO;
     }
 
-    private List<ParameterDTO> getTemplateImplParams() {
 
-        List<ParameterDTO> templateImplParams = new ArrayList<>();
-        ParameterDTO bpelProfile = new ParameterDTO();
-        bpelProfile.setParamName("BPELEngineProfile");
-        bpelProfile.setParamValue("TestBPSProfile");
-        templateImplParams.add(bpelProfile);
-        ParameterDTO HTSubject = new ParameterDTO();
-        HTSubject.setParamName("HTSubject");
-        HTSubject.setParamValue("");
-        templateImplParams.add(HTSubject);
-        ParameterDTO HTDescription = new ParameterDTO();
-        HTDescription.setParamName("HTDescription");
-        HTDescription.setParamValue("");
-        templateImplParams.add(HTDescription);
-        return templateImplParams;
-    }
 
 }

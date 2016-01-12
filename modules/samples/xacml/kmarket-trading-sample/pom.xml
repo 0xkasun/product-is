@@ -3,16 +3,8 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-    <parent>
-        <groupId>org.wso2.is</groupId>
-        <artifactId>wso2is-identity-samples-xacml</artifactId>
-        <version>5.1.0-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
-    </parent>
-
     <modelVersion>4.0.0</modelVersion>
     <artifactId>org.wso2.carbon.identity.samples.entitlement.kmarket.trading</artifactId>
-    <version>1.0.0</version>
     <packaging>jar</packaging>
     <name>WSO2 Entitlement Sample Online Trading</name>
 
@@ -50,8 +42,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>1.6</source>
-                    <target>1.6</target>
+                    <source>1.7</source>
+                    <target>1.7</target>
                 </configuration>
             </plugin>
        </plugins>
@@ -68,7 +60,6 @@
         <pluginRepository>
             <id>tlc</id>
             <name>TLC Repository</name>
-
             <url>http://commons.ucalgary.ca/pub/m2</url>
         </pluginRepository>
 

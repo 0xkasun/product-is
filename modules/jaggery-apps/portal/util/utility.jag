@@ -2,6 +2,7 @@
 include("constants.jag");
 
 var log = new Log();
+var identityServerURL = Packages.org.wso2.carbon.identity.core.util.IdentityUtil;
 
 /*
  * Function to update server url information
@@ -30,6 +31,7 @@ function setServerURL() {
 
         //retrieving site configuration for overiding ui urls
         var proxyConfHost = jsonConf.proxy.proxyHost;
+        var fidoAppId = jsonConf.fido.appId;
 
 
 
@@ -94,10 +96,10 @@ function setServerURL() {
         }
 
         //create server service url
-        serverUrl = mgtTransport  + "://"+ hostName + ":" + httpsPort + proxyContextPath + "/services";
+        serverUrl = identityServerURL.getServerURL("", true, true) + "/services";
 
         //basic server core url : https://<HOST_NAME>:<PORT>/<PROXY_CONTEXT_PATH>
-        var serverCoreUrl = mgtTransport  + "://"+ hostName + ":" + httpsPort + proxyContextPath;
+        var serverCoreUrl = identityServerURL.getServerURL("", true, false);
 
         //set server url infomation
         application.put(MGT_HOST_NAME, mgtHostName);
@@ -106,6 +108,7 @@ function setServerURL() {
         application.put(SERVER_URL, serverUrl);
         application.put(SERVER_CORE_URL, serverCoreUrl);
         application.put(PROXY_CONTEXT_PATH, proxyContextPath);
+        application.put(FIDO_APP_ID, fidoAppId);
 
         if (log.isDebugEnabled()) {
             log.debug("Host Name       :" + hostName);
@@ -115,6 +118,11 @@ function setServerURL() {
             log.debug("Proxy Context Path :" + proxyContextPath);
         }
     }
+}
+
+function getFidoAppId(){
+    setServerURL();
+    return application.get(FIDO_APP_ID);
 }
 
 %>

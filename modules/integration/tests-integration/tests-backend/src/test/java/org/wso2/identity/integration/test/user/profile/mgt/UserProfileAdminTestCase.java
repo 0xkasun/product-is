@@ -34,6 +34,7 @@ public class UserProfileAdminTestCase extends ISIntegrationTest {
     private UserProfileMgtServiceClient userProfileMgtClient;
     private UserManagementClient userMgtClient;
     private AuthenticatorClient logManger;
+    private String userId1 = "UserProfileAdminTestUser1";
     
     @BeforeClass(alwaysRun = true)
     public void testInit() throws Exception {
@@ -43,19 +44,19 @@ public class UserProfileAdminTestCase extends ISIntegrationTest {
         userProfileMgtClient = new UserProfileMgtServiceClient(backendURL, sessionCookie);
         userMgtClient = new UserManagementClient(backendURL, sessionCookie);
         
-        userMgtClient.addUser("user1", "passWord1@", new String[]{"admin"}, "default");
+        userMgtClient.addUser(userId1, "passWord1@", new String[]{"admin"}, "default");
     }
     
     @AfterClass(alwaysRun = true)
     public void atEnd() throws Exception {
-        userMgtClient.deleteUser("user1");
+        userMgtClient.deleteUser(userId1);
         logManger = null;
 
     }
     
-    @Test(groups = "wso2.is", description = "Check get user profiles")
+    @Test(priority = 1, groups = "wso2.is", description = "Check get user profiles")
     public void testGetUserProfiles() throws Exception {
-        UserProfileDTO[] profiles = userProfileMgtClient.getUserProfiles("user1");
+        UserProfileDTO[] profiles = userProfileMgtClient.getUserProfiles(userId1);
         String profile = null;
         
         for (UserProfileDTO userProfileDTO : profiles) {
@@ -64,9 +65,9 @@ public class UserProfileAdminTestCase extends ISIntegrationTest {
         Assert.assertEquals(profile, "default", "Getting user profiles has failed.");
     }
     
-    @Test(groups = "wso2.is", description = "Check get user profile")
+    @Test(priority = 2, groups = "wso2.is", description = "Check get user profile")
     public void testGetUserProfile() throws Exception {
-        UserProfileDTO profile = userProfileMgtClient.getUserProfile("user1", "default");
+        UserProfileDTO profile = userProfileMgtClient.getUserProfile(userId1, "default");
         UserFieldDTO[] fields = profile.getFieldValues(); 
         String displayValue = null;
         
@@ -76,7 +77,7 @@ public class UserProfileAdminTestCase extends ISIntegrationTest {
         		break;
         	}
 		}
-        Assert.assertTrue("user1".equals(displayValue) || "user1".equals(displayValue), "Getting user profile has failed.");
+        Assert.assertTrue(userId1.equals(displayValue), "Getting user profile has failed.");
     }
 
     /**
@@ -85,7 +86,7 @@ public class UserProfileAdminTestCase extends ISIntegrationTest {
      *
      * @throws Exception
      */
-    @Test(groups = "wso2.is", description = "Check set user profiles")
+    @Test(priority = 3, groups = "wso2.is", description = "Check set user profiles")
     public void testSetUserProfile() throws Exception {
         logManger.login(isServer.getSuperTenant().getTenantAdmin().getUserName(),
                         isServer.getSuperTenant().getTenantAdmin().getPassword(),
@@ -112,9 +113,9 @@ public class UserProfileAdminTestCase extends ISIntegrationTest {
 
         profile.setFieldValues(fields);
 
-        userProfileMgtClient.setUserProfile("user1", profile);
+        userProfileMgtClient.setUserProfile(userId1, profile);
 
-        UserProfileDTO getProfile = userProfileMgtClient.getUserProfile("user1", "default");
+        UserProfileDTO getProfile = userProfileMgtClient.getUserProfile(userId1, "default");
         UserFieldDTO[] updatedFields = getProfile.getFieldValues();
         for (UserFieldDTO updatedField : updatedFields) {
             if (updatedField.getClaimUri().equals("http://wso2.org/claims/lastname")) {
